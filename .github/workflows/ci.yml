@@ -3,7 +3,6 @@ name: macOS build
 on:
   push:
     branches: [main]
-    tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
@@ -23,14 +22,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test
         run: ./scripts/test.sh --parallel
-      - name: Set release version
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: |
-          VERSION="${RELEASE_TAG#v}"
-          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
-          echo "CLIPSHELF_VERSION=$VERSION" >> "$GITHUB_ENV"
       - name: Build and package
         run: ./scripts/package.sh --arch arm64
       - name: Verify disk image
@@ -39,6 +30,8 @@ jobs:
           ./scripts/verify-dmg.sh "dist/ClipShelf-${APP_VERSION}-macOS-arm64.dmg"
       - name: Smoke test
         run: dist/ClipShelf.app/Contents/MacOS/ClipShelf --smoke-test
+      - name: Verify real Sparkle update
+        run: ./scripts/verify-update.sh dist/ClipShelf.app
       - name: Upload app
         uses: actions/upload-artifact@v4
         with:

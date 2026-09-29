@@ -2,7 +2,7 @@
 
 按一下快捷键，把之前复制过的文字、图片或文件找回来。ClipShelf 是 macOS 原生菜单栏应用：上下预览、回车选择，选中的内容立即回到系统剪贴板，并成为历史中的最新一条。
 
-延续 [video_cut](https://github.com/SeanLi-Coder/video_cut) 的本地工具方式：源码可读、双击启动、数据留在自己的 Mac。使用 Swift / AppKit / SwiftUI 构建，无第三方依赖、无服务器、无账号。
+延续 [video_cut](https://github.com/SeanLi-Coder/video_cut) 的本地工具方式：源码可读、双击启动、剪贴板数据留在自己的 Mac。使用 Swift / AppKit / SwiftUI 构建，通过 Sparkle 验证和安装更新，无需账号。
 
 ![ClipShelf 历史选择窗口](docs/screenshot.png)
 
@@ -19,6 +19,14 @@
 同一 Release 也提供 `macOS-arm64.zip` 备用包，解压后将 `ClipShelf.app` 拖到「应用程序」即可。两种格式包含相同的 Apple Silicon 应用。
 
 发布包使用 ad-hoc 签名，尚未使用 Apple Developer ID 签名或完成公证。如果 macOS 阻止首次打开，请先确认文件来自本仓库，再按 Apple 提供的方法，在「系统设置 → 隐私与安全性」选择「仍要打开」。详见 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。
+
+### 应用内更新
+
+从 **1.1.0** 起，可在菜单栏或设置中点击「检查更新…」，按提示下载并安装新版本。默认每天自动检查一次，安装需要确认；可以在设置中关闭自动检查。请先将 App 放入「应用程序」，再使用更新功能。
+
+更新通过 HTTPS 读取本仓库的更新信息、下载 GitHub Release 安装包，并验证 Sparkle EdDSA 签名。剪贴板历史和设置保留在本机，更新不会上传这些内容，也不发送系统分析数据。Appcast 和安装包的签名验证独立于 Apple 的开发者签名与公证。
+
+**1.0.0 用户需要手动下载安装一次 1.1.0 或更新版本**，之后即可使用应用内更新。
 
 ### 从源码双击启动
 
@@ -51,7 +59,7 @@ xcode-select --install
 | 选择更早或更新的记录 | **↑ / ↓** |
 | 还原选中内容，并移到历史第一条 | **Return** 或点击还原按钮 |
 | 关闭窗口 | **Esc** |
-| 不打开窗口，逐次还原更早的历史 | **⌘⌥V**，可在设置修改；连续按可循环浏览 |
+| 不打开窗口，逐次还原更早的历史 | **⌃⌘V**，可在设置修改；连续按可循环浏览 |
 | 直接还原历史第 1～9 条 | 可选 **⌃⌥1…9**，默认关闭 |
 | 还原窗口中当前筛选结果的第 1～9 条 | 窗口内按 **⌘1…9** |
 | 查找记录 | 窗口内按 **⌘F** 聚焦搜索，查找文字、文件名或来源 App |
@@ -59,7 +67,7 @@ xcode-select --install
 
 例如依次复制 A、B、C，历史顺序就是 C、B、A。在窗口选中 A 后按 Return，系统剪贴板变成 A，历史顺序变成 A、C、B。回到要输入的 App，按 **⌘V** 即可使用 A。选择图片、文件或视频文件时也是同样的操作。
 
-「直接还原上一条」会记住开始循环时的历史顺序。历史为 C、B、A，当前剪贴板为 C 时，连续按 ⌘⌥V 会按 **C → B → A → C** 的顺序循环；每次恢复的内容也会移到历史第一条。新复制内容或通过窗口另选内容后，会从更新后的历史重新开始循环。
+「直接还原上一条」会记住开始循环时的历史顺序。历史为 C、B、A，当前剪贴板为 C 时，连续按 ⌃⌘V 会按 **C → B → A → C** 的顺序循环；每次恢复的内容也会移到历史第一条。新复制内容或通过窗口另选内容后，会从更新后的历史重新开始循环。
 
 默认只还原剪贴板。若希望选择后直接粘贴到之前使用的 App，可在设置开启「自动粘贴」，并按系统要求授予「辅助功能」权限。普通的记录、选择和还原不需要此权限。自动粘贴相当于向目标 App 发送 ⌘V，是否接收该内容由目标 App 决定。
 
@@ -96,7 +104,7 @@ xcode-select --install
 
 ## 开发与打包
 
-App 面向 Apple Silicon，支持 macOS 13 或更新版本；源码构建需要 Apple Command Line Tools 和 Swift 5.9 或更新版本。运行 Swift Testing 测试需要 **macOS 14 或更新版本、Swift 6 或更新版本**；测试 SDK 的要求不改变 App 的最低系统版本。脚本明确调用 `/usr/bin/xcrun swift`，避免与其他同名命令冲突。
+App 面向 Apple Silicon，支持 macOS 13 或更新版本；源码构建需要 Apple Command Line Tools 和 Swift 5.9 或更新版本，首次构建会下载固定版本的 Sparkle 2.10.0。运行 Swift Testing 测试需要 **macOS 14 或更新版本、Swift 6 或更新版本**；测试 SDK 的要求不改变 App 的最低系统版本。脚本明确调用 `/usr/bin/xcrun swift`，避免与其他同名命令冲突。
 
 ```bash
 # Run tests.
@@ -118,23 +126,28 @@ dist/ClipShelf.app/Contents/MacOS/ClipShelf --smoke-test
 APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/ClipShelf.app/Contents/Info.plist)"
 ./scripts/verify-dmg.sh "dist/ClipShelf-${APP_VERSION}-macOS-arm64.dmg"
 
+# Verify installation, relaunch, and signature rejection with isolated fixtures.
+./scripts/verify-update.sh dist/ClipShelf.app
+
 # Override the release version.
-CLIPSHELF_VERSION=1.0.1 CLIPSHELF_BUILD_NUMBER=2 ./scripts/package.sh
+CLIPSHELF_VERSION=1.1.1 ./scripts/package.sh
 ```
 
 `scripts/test.sh` 自动兼容 Command Line Tools 和完整 Xcode，也可以透传 `--parallel`、`--filter` 等参数。只安装 Command Line Tools 时，它会指定 Swift Testing 的 framework / macro 路径并使用 native build system。
 
-构建产物位于 `dist/ClipShelf.app`；打包脚本仅接受 `arm64`，同时生成 `ClipShelf-1.0.0-macOS-arm64.dmg`、`ClipShelf-1.0.0-macOS-arm64.zip` 及各自的 `.sha256` 文件，文件名中的版本号随发布版本变化。在下载文件夹中校验对应的包：
+构建产物位于 `dist/ClipShelf.app`；打包脚本仅接受 `arm64`，同时生成 `ClipShelf-1.1.0-macOS-arm64.dmg`、`ClipShelf-1.1.0-macOS-arm64.zip` 及各自的 `.sha256` 文件，文件名中的版本号随发布版本变化。在下载文件夹中校验对应的包：
 
 ```bash
-shasum -a 256 -c ClipShelf-1.0.0-macOS-arm64.dmg.sha256
-shasum -a 256 -c ClipShelf-1.0.0-macOS-arm64.zip.sha256
+shasum -a 256 -c ClipShelf-1.1.0-macOS-arm64.dmg.sha256
+shasum -a 256 -c ClipShelf-1.1.0-macOS-arm64.zip.sha256
 ```
 
-图标由 `scripts/generate-icon.swift` 使用 AppKit 向量绘制，构建时按需生成 `.icns`，无需下载素材。GitHub Actions 在 Apple Silicon `macos-15` runner 上执行测试、构建、DMG 验证和启动检查，提供 DMG、ZIP 与各自的 SHA-256 artifact。Runner 标签依据 [GitHub 官方文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) 配置。
+图标由 `scripts/generate-icon.swift` 使用 AppKit 向量绘制，构建时按需生成 `.icns`，无需下载素材。GitHub Actions 在 Apple Silicon `macos-15` runner 上执行测试、构建、DMG 验证、启动检查和隔离更新验证，提供 DMG、ZIP 与各自的 SHA-256 artifact。Runner 标签依据 [GitHub 官方文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) 配置。
+
+推送版本 tag 或发布 GitHub Release 后，发布流程自动签名安装包与 Appcast、上传 Release 资产并更新独立的 `updates` 分支。维护者设置、密钥备份及重试方式见 [发布说明](docs/RELEASING.md)。
 
 手动验收步骤见 [docs/TESTING.md](docs/TESTING.md)。GitHub CI 验证结果以仓库 Actions 页面为准；编译和自动检查不能替代不同 macOS 版本、目标 App 与辅助功能授权的实机验证。
 
 ## License
 
-[MIT](LICENSE)。
+[MIT](LICENSE)。更新框架 Sparkle 使用其 [开源许可证](https://github.com/sparkle-project/Sparkle/blob/2.10.0/LICENSE)，许可证副本包含在 App 的 Resources 目录中。

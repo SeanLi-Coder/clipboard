@@ -1,0 +1,186 @@
+name: Publish macOS update
+
+on:
+  push:
+    tags: ["v*"]
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag (v1.1.0)
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag || github.ref_name }}
+  CLIPSHELF_REPOSITORY: ${{ github.repository }}
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  release:
+    if: github.event_name != 'release' || !github.event.release.prerelease
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+      - name: Validate release tag
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "CLIPSHELF_VERSION=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+          echo "CLIPSHELF_BUILD_NUMBER=${RELEASE_TAG#v}" >> "$GITHUB_ENV"
+      - name: Inspect existing release
+        id: existing
+        run: |
+          mkdir -p dist
+          if gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,isPrerelease > "$RUNNER_TEMP/release.json"; then
+            python3 - "$RUNNER_TEMP/release.json" "$CLIPSHELF_VERSION" >> "$GITHUB_OUTPUT" <<'PYTHON'
+          import json
+          import sys
+          release = json.load(open(sys.argv[1]))
+          if release['isPrerelease']:
+              raise SystemExit('Prereleases cannot replace the stable update feed.')
+          prefix = f'ClipShelf-{sys.argv[2]}-macOS-arm64'
+          required = {prefix + suffix for suffix in ('.dmg', '.dmg.sha256', '.zip', '.zip.sha256')}
+          required.add('appcast.xml')
+          present = {asset['name'] for asset in release['assets']}
+          if present & required and not required <= present:
+              raise SystemExit('Partial release assets exist. Resolve them before rerunning; existing assets will not be overwritten.')
+          print('complete=' + str(required <= present).lower())
+          print('exists=true')
+          PYTHON
+          else
+            echo "complete=false" >> "$GITHUB_OUTPUT"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Test
+        if: steps.existing.outputs.complete != 'true'
+        run: ./scripts/test.sh --parallel
+      - name: Build and package
+        if: steps.existing.outputs.complete != 'true'
+        run: ./scripts/package.sh --arch arm64
+      - name: Verify disk image
+        if: steps.existing.outputs.complete != 'true'
+        run: ./scripts/verify-dmg.sh "dist/ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg"
+      - name: Smoke test
+        if: steps.existing.outputs.complete != 'true'
+        run: dist/ClipShelf.app/Contents/MacOS/ClipShelf --smoke-test
+      - name: Verify real Sparkle update
+        if: steps.existing.outputs.complete != 'true'
+        run: ./scripts/verify-update.sh dist/ClipShelf.app
+      - name: Sign and verify update feed
+        if: steps.existing.outputs.complete != 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set +x
+          test -n "$SPARKLE_PRIVATE_KEY"
+          umask 077
+          KEY_FILE="$(mktemp "$RUNNER_TEMP/sparkle-key.XXXXXX")"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          unset SPARKLE_PRIVATE_KEY
+          ./scripts/sign-feed.sh "dist/ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg" --key-file "$KEY_FILE"
+      - name: Create draft release
+        if: steps.existing.outputs.exists != 'true'
+        run: gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --verify-tag --draft --latest=false --title "ClipShelf ${CLIPSHELF_VERSION}" --generate-notes
+      - name: Upload immutable release assets
+        if: steps.existing.outputs.complete != 'true'
+        run: |
+          gh release upload "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            "dist/ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg" \
+            "dist/ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg.sha256" \
+            "dist/ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.zip" \
+            "dist/ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.zip.sha256" \
+            dist/appcast.xml dist/appcast.xml.sha256
+      - name: Reuse previously signed feed
+        if: steps.existing.outputs.complete == 'true'
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          set +x
+          test -n "$SPARKLE_PRIVATE_KEY"
+          umask 077
+          KEY_FILE="$(mktemp "$RUNNER_TEMP/sparkle-key.XXXXXX")"
+          trap 'rm -f "$KEY_FILE"' EXIT
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+          unset SPARKLE_PRIVATE_KEY
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern appcast.xml \
+            --pattern "ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg" \
+            --pattern "ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg.sha256" --dir dist
+          (cd dist && shasum -a 256 -c "ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg.sha256")
+          ./scripts/verify-feed.sh dist/appcast.xml "dist/ClipShelf-${CLIPSHELF_VERSION}-macOS-arm64.dmg" --key-file "$KEY_FILE"
+      - name: Publish release
+        run: |
+          if [[ "$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)" == "true" ]]; then
+            gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest=false
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-appcast
+          path: dist/appcast.xml
+          if-no-files-found: error
+          retention-days: 7
+
+  update-feed:
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    concurrency:
+      group: clipshelf-stable-update-feed
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_TAG }}
+          fetch-depth: 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-appcast
+          path: ${{ runner.temp }}/signed-appcast
+      - name: Publish feed without downgrade
+        run: |
+          CANDIDATE="$RUNNER_TEMP/signed-appcast/appcast.xml"
+          cp scripts/compare-appcasts.py "$RUNNER_TEMP/compare-appcasts.py"
+          REMOTE_BRANCH="$(git ls-remote --heads origin updates)"
+          if [[ -n "$REMOTE_BRANCH" ]]; then
+            git fetch origin refs/heads/updates:refs/remotes/origin/updates
+            if git cat-file -e refs/remotes/origin/updates:appcast.xml; then
+              git show refs/remotes/origin/updates:appcast.xml > "$RUNNER_TEMP/current-appcast.xml"
+              COMPARISON="$(python3 "$RUNNER_TEMP/compare-appcasts.py" "$CANDIDATE" "$RUNNER_TEMP/current-appcast.xml")"
+              if [[ "$COMPARISON" == "older" ]]; then
+                echo "A newer update feed is already published. Leaving it unchanged."
+                exit 0
+              fi
+              if [[ "$COMPARISON" == "same" ]]; then
+                if cmp -s "$CANDIDATE" "$RUNNER_TEMP/current-appcast.xml"; then
+                  echo "This signed update feed is already published."
+                  gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --latest
+                  exit 0
+                fi
+                echo "Refusing to replace the feed for an already published build number." >&2
+                exit 1
+              fi
+            fi
+            git checkout -B updates refs/remotes/origin/updates
+          else
+            git switch --orphan updates
+          fi
+          cp "$CANDIDATE" appcast.xml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add appcast.xml
+          git commit -m "Publish signed update feed for $RELEASE_TAG"
+          git push origin HEAD:refs/heads/updates
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --latest

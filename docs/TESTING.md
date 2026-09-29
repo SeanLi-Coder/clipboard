@@ -9,6 +9,7 @@
 - [ ] `./scripts/verify-dmg.sh dist/ClipShelf-<version>-macOS-arm64.dmg` 通过。
 - [ ] `codesign --verify --strict --verbose=2 dist/ClipShelf.app` 通过。
 - [ ] `dist/ClipShelf.app/Contents/MacOS/ClipShelf --smoke-test` 成功退出，不改变系统剪贴板或正式历史。
+- [ ] `./scripts/verify-update.sh dist/ClipShelf.app` 通过：临时 App 完成安装和重启，合成历史保留，错误 feed / 安装包签名被拒绝。
 - [ ] 打开 DMG，将 `ClipShelf.app` 拖到 Applications 入口，从「应用程序」启动后可推出安装磁盘，菜单栏显示图标，Dock 中不常驻应用图标。
 - [ ] 备用 ZIP 解压后也可正常安装和运行。
 - [ ] 双击 `start.command` 能编译并启动，关闭 Terminal 后仍可使用。
@@ -25,8 +26,8 @@
 - [ ] 搜索词能匹配文字、文件名和来源 App；清空搜索后可继续上下选择。
 - [ ] 窗口内按 ⌘F 聚焦搜索；⌘1…9 恢复当前筛选结果中对应位置的记录，筛选结果不足时不误选其他记录。
 - [ ] 列表为空和搜索无结果时，Return、↑、↓ 不崩溃。
-- [ ] 重新复制 `Alpha`、`Beta`、`Gamma` 后，当前剪贴板为 `Gamma`；连续按 ⌘⌥V 按固定顺序恢复 `Beta`、`Alpha`、`Gamma`，每次使用的内容仍移到历史第一条。
-- [ ] 循环期间新复制内容，或从窗口另选记录后，下次 ⌘⌥V 从更新后的历史重新开始循环。
+- [ ] 重新复制 `Alpha`、`Beta`、`Gamma` 后，当前剪贴板为 `Gamma`；连续按 ⌃⌘V 按固定顺序恢复 `Beta`、`Alpha`、`Gamma`，每次使用的内容仍移到历史第一条。
+- [ ] 循环期间新复制内容，或从窗口另选记录后，下次 ⌃⌘V 从更新后的历史重新开始循环。
 - [ ] 修改全局快捷键后，新组合生效，旧组合被释放；冲突时显示可理解的提示。
 - [ ] 开启 ⌃⌥1…9 后对应历史位置可恢复，关闭后不再占用这些快捷键。
 
@@ -67,3 +68,6 @@
 - [ ] 发布版本号与 Info.plist、DMG 和 ZIP 文件名一致，发布资产只包含 Apple Silicon `arm64` 包。
 - [ ] 下载 DMG、ZIP 及各自校验文件后，两份 `shasum -a 256 -c <archive>.sha256` 均通过。
 - [ ] README 准确说明 ad-hoc 签名、未公证，以及原文件不会归档。
+- [ ] 从已安装的上一版中选择「检查更新…」，可下载、确认安装和重新启动；历史与设置仍保留。
+- [ ] 关闭设置中的自动检查后不会定期请求更新；手动检查仍可使用。
+- [ ] GitHub Release 资产可公开下载后才更新 `updates/appcast.xml`，旧版本工作流不覆盖新 feed。

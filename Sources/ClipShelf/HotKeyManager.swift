@@ -10,7 +10,7 @@ struct KeyboardShortcut: Codable, Equatable, Hashable {
         keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey | shiftKey)
     )
     static let previousDefault = KeyboardShortcut(
-        keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey | optionKey)
+        keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(cmdKey | controlKey)
     )
 
     static let supportedModifiers = UInt32(controlKey | optionKey | shiftKey | cmdKey)
@@ -27,6 +27,16 @@ struct KeyboardShortcut: Codable, Equatable, Hashable {
     var isValid: Bool {
         modifiers != 0 && modifiers & ~Self.supportedModifiers == 0
             && keyCode <= 127 && !Self.modifierKeyCodes.contains(keyCode)
+            && !isReservedForFinder
+    }
+
+    var isReservedForFinder: Bool {
+        keyCode == UInt32(kVK_ANSI_V) && modifiers == UInt32(cmdKey | optionKey)
+    }
+
+    var validationError: HotKeyError? {
+        if isReservedForFinder { return .reservedForFinder }
+        return isValid ? nil : .invalid(self)
     }
 
     init(keyCode: UInt32, modifiers: UInt32) {
@@ -75,6 +85,7 @@ struct KeyboardShortcut: Codable, Equatable, Hashable {
 
 enum HotKeyError: LocalizedError {
     case invalid(KeyboardShortcut)
+    case reservedForFinder
     case duplicate(KeyboardShortcut)
     case handler(OSStatus)
     case registration(KeyboardShortcut, OSStatus)
@@ -83,6 +94,8 @@ enum HotKeyError: LocalizedError {
         switch self {
         case .invalid:
             return "快捷键必须包含 ⌘、⌥、⌃ 或 ⇧，以及一个普通按键。"
+        case .reservedForFinder:
+            return "⌥⌘V 是 Finder「移动项目到这里」的保留快捷键，请换用其他组合。"
         case .duplicate(let shortcut):
             return "快捷键 \(shortcut.displayName) 重复了，请为不同操作设置不同的快捷键。"
         case .handler(let status):
@@ -153,7 +166,7 @@ final class HotKeyManager {
 
         var seen = Set<KeyboardShortcut>()
         for (shortcut, _) in requested {
-            guard shortcut.isValid else { throw HotKeyError.invalid(shortcut) }
+            if let error = shortcut.validationError { throw error }
             guard seen.insert(shortcut).inserted else { throw HotKeyError.duplicate(shortcut) }
         }
         try installHandlerIfNeeded()

@@ -24,11 +24,12 @@ final class HistoryPanel: NSPanel {
 }
 
 @MainActor
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuDelegate, NSMenuItemValidation {
     private var store: HistoryStore!
     private var settings: AppSettings!
     private let state = PickerState()
     private let hotkeys = HotKeyManager()
+    private var updater: AppUpdater!
     private var statusItem: NSStatusItem!
     private var panel: HistoryPanel!
     private var settingsWindow: NSWindow?
@@ -43,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         isDemo = CommandLine.arguments.contains("--smoke-test") || CommandLine.arguments.contains("--preview-output")
+        updater = AppUpdater(enabled: !isDemo)
         if !isDemo, let bundleID = Bundle.main.bundleIdentifier,
            NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).contains(where: {
                $0.processIdentifier != ProcessInfo.processInfo.processIdentifier
@@ -68,6 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if !isDemo {
             do { try registerHotkeys() } catch { state.error = error.localizedDescription }
             store.startMonitoring()
+            updater.start()
         }
         store.$entries.sink { [weak self] _ in
             DispatchQueue.main.async { self?.reconcileSelection() }
@@ -138,6 +141,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         menu.addItem(.separator())
         addMenuItem(menu, store.isPaused ? "继续记录" : "暂停记录", #selector(togglePause))
         addMenuItem(menu, "设置…", #selector(openSettings))
+        addMenuItem(menu, "检查更新…", #selector(checkForUpdates))
         menu.addItem(.separator())
         addMenuItem(menu, "退出 ClipShelf", #selector(quit))
     }
@@ -146,6 +150,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let item = NSMenuItem(title: title, action: action, keyEquivalent: "")
         item.target = self
         menu.addItem(item)
+    }
+
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        if menuItem.action == #selector(checkForUpdates) { return updater.manualCheckAvailable }
+        return true
     }
 
     private func makePanel() {
@@ -175,6 +184,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     @objc private func previousItem() { choosePrevious() }
     @objc private func togglePause() { store.isPaused.toggle() }
     @objc private func openSettings() { showSettings() }
+    @objc private func checkForUpdates() {
+        pasteGeneration = UUID()
+        hidePicker(restoreFocus: false)
+        updater.checkForUpdates()
+    }
     @objc private func quit() { NSApp.terminate(nil) }
 
     private func rememberTarget() {
@@ -352,7 +366,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                                   styleMask: [.titled, .closable], backing: .buffered, defer: false)
             window.title = "ClipShelf 设置"
             window.isReleasedWhenClosed = false
-            window.contentView = NSHostingView(rootView: SettingsView(settings: settings, store: store) { [weak self] picker, previous, quickSlots, maxEntries, autoPaste in
+            window.contentView = NSHostingView(rootView: SettingsView(settings: settings, store: store, updater: updater) { [weak self] picker, previous, quickSlots, maxEntries, autoPaste in
                 guard let self else { return }
                 try self.registerHotkeys(picker: picker, previous: previous, quickSlots: quickSlots)
                 self.settings.pickerShortcut = picker

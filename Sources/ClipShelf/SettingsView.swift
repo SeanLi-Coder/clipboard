@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var settings: AppSettings
     @ObservedObject var store: HistoryStore
+    @ObservedObject var updater: AppUpdater
     let onSave: (KeyboardShortcut, KeyboardShortcut, Bool, Int, Bool) throws -> Void
     @ViewState private var pickerShortcut: KeyboardShortcut
     @ViewState private var previousShortcut: KeyboardShortcut
@@ -22,10 +23,12 @@ struct SettingsView: View {
     init(
         settings: AppSettings,
         store: HistoryStore,
+        updater: AppUpdater,
         onSave: @escaping (KeyboardShortcut, KeyboardShortcut, Bool, Int, Bool) throws -> Void
     ) {
         self.settings = settings
         self.store = store
+        self.updater = updater
         self.onSave = onSave
         _pickerShortcut = ViewState(initialValue: settings.pickerShortcut)
         _previousShortcut = ViewState(initialValue: settings.previousShortcut)
@@ -78,10 +81,24 @@ struct SettingsView: View {
                         set: { setLoginEnabled($0) }
                     ))
                     HStack {
-                        Text("历史仅保存在本机，不联网、不上传。").font(.caption).foregroundStyle(.secondary)
+                        Text("剪贴板历史仅保存在本机，不会上传。").font(.caption).foregroundStyle(.secondary)
                         Spacer()
                         Button("清空历史…", role: .destructive) { confirmClear = true }
                     }
+                }
+                Section("版本与更新") {
+                    HStack {
+                        Text("ClipShelf \(updater.currentVersion)")
+                        Spacer()
+                        Button("检查更新…") { updater.checkForUpdates() }
+                            .disabled(!updater.manualCheckAvailable)
+                    }
+                    Toggle("自动检查新版本", isOn: Binding(
+                        get: { updater.automaticChecksEnabled },
+                        set: { updater.automaticChecksEnabled = $0 }
+                    )).disabled(!updater.isEnabled)
+                    Text("每天检查一次。新版本可直接下载并重启安装，保留历史和设置；只有更新功能会联网。").font(.caption).foregroundStyle(.secondary)
+                    if let error = updater.startupError { Text(error).font(.caption).foregroundStyle(.orange) }
                 }
             }.formStyle(.grouped)
             Divider()

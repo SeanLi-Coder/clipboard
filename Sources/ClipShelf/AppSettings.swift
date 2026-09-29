@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Combine
 import Foundation
 import SwiftUI
@@ -17,13 +18,36 @@ final class AppSettings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
-        func shortcut(_ key: String, fallback: KeyboardShortcut) -> KeyboardShortcut {
+        func savedShortcut(_ key: String) -> KeyboardShortcut? {
             guard let data = defaults.data(forKey: key),
-                  let value = try? JSONDecoder().decode(KeyboardShortcut.self, from: data), value.isValid else { return fallback }
+                  let value = try? JSONDecoder().decode(KeyboardShortcut.self, from: data) else { return nil }
             return value
         }
-        pickerShortcut = shortcut("pickerShortcut", fallback: .pickerDefault)
-        previousShortcut = shortcut("previousShortcut", fallback: .previousDefault)
+        let savedPicker = savedShortcut("pickerShortcut")
+        let savedPrevious = savedShortcut("previousShortcut")
+        let keepPicker = savedPicker?.isValid == true
+        let keepPrevious = savedPrevious?.isValid == true
+        var picker = keepPicker ? savedPicker! : .pickerDefault
+        var previous = keepPrevious ? savedPrevious! : .previousDefault
+        let alternate = KeyboardShortcut(keyCode: UInt32(kVK_ANSI_V), modifiers: UInt32(controlKey | shiftKey | cmdKey))
+
+        // Keep custom combinations intact when a migrated default needs another key.
+        if !keepPicker, keepPrevious, picker == previous {
+            picker = [KeyboardShortcut.pickerDefault, alternate, .previousDefault].first { $0 != previous }!
+        }
+        if !keepPrevious, previous == picker {
+            previous = [KeyboardShortcut.previousDefault, alternate, .pickerDefault].first { $0 != picker }!
+        }
+        pickerShortcut = picker
+        previousShortcut = previous
+
+        // Persist only reserved combinations; all unrelated preferences remain untouched.
+        if savedPicker?.isReservedForFinder == true {
+            defaults.set(try? JSONEncoder().encode(picker), forKey: "pickerShortcut")
+        }
+        if savedPrevious?.isReservedForFinder == true {
+            defaults.set(try? JSONEncoder().encode(previous), forKey: "previousShortcut")
+        }
         quickSlots = defaults.bool(forKey: "quickSlots")
         let limit = defaults.integer(forKey: "maxEntries")
         maxEntries = limit == 0 ? 100 : min(1000, max(10, limit))

@@ -86,8 +86,10 @@ final class ShortcutRecordingButton: NSButton {
 
     private func accept(_ candidate: KeyboardShortcut) {
         guard isRecording else { return }
-        guard candidate.isValid else {
-            title = "请加上修饰键…"
+        if let error = candidate.validationError {
+            title = candidate.isReservedForFinder ? "⌥⌘V 为 Finder 保留" : "请加上修饰键…"
+            toolTip = error.localizedDescription
+            setAccessibilityHelp(error.localizedDescription)
             NSSound.beep()
             return
         }
@@ -105,6 +107,8 @@ final class ShortcutRecordingButton: NSButton {
         ShortcutCapture.receive = nil
         ShortcutCapture.cancel = nil
         title = shortcut.displayName
+        toolTip = "点击后按下新快捷键；按 Esc 取消。"
+        setAccessibilityHelp("点击后按下带修饰键的组合；按 Escape 取消。")
         if window?.firstResponder === self { window?.makeFirstResponder(previousResponder) }
         previousResponder = nil
     }

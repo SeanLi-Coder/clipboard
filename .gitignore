@@ -1,0 +1,13 @@
+.build/
+.swiftpm/
+dist/
+.DS_Store
+*.xcuserstate
+xcuserdata/
+.idea/
+.vscode/
+*.log
+
+# Clipboard history belongs in Application Support, never in this repository.
+history/
+clipboard-history/

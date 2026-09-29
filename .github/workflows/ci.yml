@@ -1,0 +1,53 @@
+name: macOS build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: macOS ${{ matrix.arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x86_64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test
+        run: ./scripts/test.sh --parallel
+      - name: Set release version
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_TAG#v}"
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          echo "CLIPSHELF_VERSION=$VERSION" >> "$GITHUB_ENV"
+      - name: Build and package
+        run: ./scripts/package.sh --arch "${{ matrix.arch }}"
+      - name: Smoke test
+        run: dist/ClipShelf.app/Contents/MacOS/ClipShelf --smoke-test
+      - name: Upload app
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClipShelf-macOS-${{ matrix.arch }}
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error

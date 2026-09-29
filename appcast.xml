@@ -1,0 +1,20 @@
+<?xml version="1.0" standalone="yes"?><!-- sparkle-sign-warning:
+IMPORTANT: This file was signed by Sparkle. Any modifications to this file requires re-signing this file with generate_appcast or sign_update! The signed signature will be embedded at the end of this file.
+--><rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>ClipShelf</title>
+        <item>
+            <title>1.1.0</title>
+            <pubDate>Tue, 29 Sep 2026 20:13:41 +0000</pubDate>
+            <link>https://github.com/SeanLi-Coder/clipboard</link>
+            <sparkle:version>1.1.0</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>13.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <enclosure url="https://github.com/SeanLi-Coder/clipboard/releases/download/v1.1.0/ClipShelf-1.1.0-macOS-arm64.dmg" length="2049146" type="application/octet-stream" sparkle:edSignature="EB0pwivutyFYlgSFdA8KwlOUpO82Ipksz0aUbfzoxIH+GR0rPw8jjJa5sRcWav/2+J8dboKBwk1E5D4wfrdgBQ=="></enclosure>
+        </item>
+    </channel>
+</rss><!-- sparkle-signatures:
+edSignature: q97t4cyMVyT7sUC47gnz4rHcAXenZR2H2YT4vODJhTVk03fkiXoopb2cBQ/IhTcCQEoVBigBy1e1KMc0SejVCg==
+length: 1210
+-->

@@ -4,14 +4,17 @@ set -euo pipefail
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-BUILD_ARCH="$(/usr/bin/uname -m)"
+BUILD_ARCH="arm64"
 if [[ "${1:-}" == "--arch" && $# -eq 2 ]]; then
   BUILD_ARCH="$2"
 elif [[ $# -ne 0 ]]; then
-  echo "Usage: scripts/build.sh [--arch arm64|x86_64]" >&2
+  echo "Usage: scripts/build.sh [--arch arm64]" >&2
   exit 2
 fi
-case "$BUILD_ARCH" in arm64|x86_64) ;; *) echo "Unsupported architecture: $BUILD_ARCH" >&2; exit 2 ;; esac
+if [[ "$BUILD_ARCH" != "arm64" ]]; then
+  echo "ClipShelf supports Apple Silicon (arm64) only." >&2
+  exit 2
+fi
 
 APP_VERSION="${CLIPSHELF_VERSION:-1.0.0}"
 APP_BUILD="${CLIPSHELF_BUILD_NUMBER:-1}"
@@ -40,6 +43,10 @@ trap 'rm -rf "$STAGING_DIR"' EXIT
 STAGED_APP="$STAGING_DIR/ClipShelf.app"
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources"
 cp "$BINARY_DIR/ClipShelf" "$STAGED_APP/Contents/MacOS/ClipShelf"
+if [[ "$(/usr/bin/lipo -archs "$STAGED_APP/Contents/MacOS/ClipShelf")" != "arm64" ]]; then
+  echo "The app executable must contain only the arm64 architecture." >&2
+  exit 1
+fi
 cp Resources/Info.plist "$STAGED_APP/Contents/Info.plist"
 cp Resources/AppIcon.icns "$STAGED_APP/Contents/Resources/AppIcon.icns"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $APP_VERSION" "$STAGED_APP/Contents/Info.plist"

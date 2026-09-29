@@ -1,14 +1,16 @@
 # ClipShelf 手动验收
 
-以下步骤用于发布前实机验收。使用无隐私内容的测试文字、图片和文件，分别在 Apple Silicon / Intel 与需要支持的 macOS 版本验证。未实际完成的步骤不要标记为通过。
+以下步骤用于发布前实机验收。使用无隐私内容的测试文字、图片和文件，在 Apple Silicon Mac 与需要支持的 macOS 版本验证。未实际完成的步骤不要标记为通过。
 
 ## 构建和首次启动
 
 - [ ] 在 macOS 14 或更新版本、Swift 6 或更新版本环境中，`./scripts/test.sh` 通过；App 本身的最低系统版本仍为 macOS 13。
-- [ ] `./scripts/package.sh` 生成 `.app`、带架构的 ZIP 和 SHA-256 文件。
+- [ ] `./scripts/package.sh` 生成 Apple Silicon `.app`、名称包含 `macOS-arm64` 的 DMG、ZIP 与各自的 SHA-256 文件。
+- [ ] `./scripts/verify-dmg.sh dist/ClipShelf-<version>-macOS-arm64.dmg` 通过。
 - [ ] `codesign --verify --strict --verbose=2 dist/ClipShelf.app` 通过。
 - [ ] `dist/ClipShelf.app/Contents/MacOS/ClipShelf --smoke-test` 成功退出，不改变系统剪贴板或正式历史。
-- [ ] 解压 ZIP 后打开 App，菜单栏显示图标，Dock 中不常驻应用图标。
+- [ ] 打开 DMG，将 `ClipShelf.app` 拖到 Applications 入口，从「应用程序」启动后可推出安装磁盘，菜单栏显示图标，Dock 中不常驻应用图标。
+- [ ] 备用 ZIP 解压后也可正常安装和运行。
 - [ ] 双击 `start.command` 能编译并启动，关闭 Terminal 后仍可使用。
 - [ ] 再次启动不会产生两个菜单栏实例。
 - [ ] 菜单退出和 `stop.command` 能正常停止。
@@ -62,6 +64,6 @@
 
 - [ ] `git status --short` 不包含个人历史、测试素材、临时文件或本地凭据。
 - [ ] README 截图只使用合成示例，不包含真实剪贴板内容。
-- [ ] 发布版本号与 Info.plist、ZIP 文件名一致。
-- [ ] 下载 ZIP 后 `shasum -a 256 -c <archive>.sha256` 通过。
+- [ ] 发布版本号与 Info.plist、DMG 和 ZIP 文件名一致，发布资产只包含 Apple Silicon `arm64` 包。
+- [ ] 下载 DMG、ZIP 及各自校验文件后，两份 `shasum -a 256 -c <archive>.sha256` 均通过。
 - [ ] README 准确说明 ad-hoc 签名、未公证，以及原文件不会归档。

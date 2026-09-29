@@ -8,13 +8,15 @@
 
 ## 下载和启动
 
-需要 **macOS 13 Ventura 或更新版本**。
+需要 **Apple Silicon Mac（M1/M2/M3/M4 等）和 macOS 13 Ventura 或更新版本**。
 
 ### 直接使用 App
 
-1. 打开 [GitHub Releases](https://github.com/SeanLi-Coder/clipboard/releases/latest)，下载与你的 Mac 对应的 ZIP：Apple Silicon（M1/M2/M3/M4 等）选择 `arm64`，Intel 选择 `x86_64`。
-2. 解压，把 `ClipShelf.app` 拖到「应用程序」。
-3. 打开 ClipShelf，菜单栏会出现剪贴板图标。复制一些内容后，按 **⌘⇧V** 打开历史窗口。
+1. 打开 [GitHub Releases](https://github.com/SeanLi-Coder/clipboard/releases/latest)，下载名称以 `macOS-arm64.dmg` 结尾的安装包。
+2. 双击打开 DMG，把 `ClipShelf.app` 拖到窗口中的 **Applications（应用程序）** 入口。
+3. 从「应用程序」打开 ClipShelf，再推出安装磁盘。菜单栏会出现剪贴板图标；复制一些内容后，按 **⌘⇧V** 打开历史窗口。
+
+同一 Release 也提供 `macOS-arm64.zip` 备用包，解压后将 `ClipShelf.app` 拖到「应用程序」即可。两种格式包含相同的 Apple Silicon 应用。
 
 发布包使用 ad-hoc 签名，尚未使用 Apple Developer ID 签名或完成公证。如果 macOS 阻止首次打开，请先确认文件来自本仓库，再按 Apple 提供的方法，在「系统设置 → 隐私与安全性」选择「仍要打开」。详见 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。
 
@@ -94,7 +96,7 @@ xcode-select --install
 
 ## 开发与打包
 
-App 支持 macOS 13 或更新版本，源码构建需要 Apple Command Line Tools 和 Swift 5.9 或更新版本。运行 Swift Testing 测试需要 **macOS 14 或更新版本、Swift 6 或更新版本**；测试 SDK 的要求不改变 App 的最低系统版本。脚本明确调用 `/usr/bin/xcrun swift`，避免与其他同名命令冲突。
+App 面向 Apple Silicon，支持 macOS 13 或更新版本；源码构建需要 Apple Command Line Tools 和 Swift 5.9 或更新版本。运行 Swift Testing 测试需要 **macOS 14 或更新版本、Swift 6 或更新版本**；测试 SDK 的要求不改变 App 的最低系统版本。脚本明确调用 `/usr/bin/xcrun swift`，避免与其他同名命令冲突。
 
 ```bash
 # Run tests.
@@ -106,11 +108,15 @@ App 支持 macOS 13 或更新版本，源码构建需要 Apple Command Line Tool
 # Run an isolated startup smoke test.
 dist/ClipShelf.app/Contents/MacOS/ClipShelf --smoke-test
 
-# Build a release ZIP and SHA-256 checksum.
+# Build Apple Silicon DMG, ZIP, and SHA-256 checksums.
 ./scripts/package.sh
 
-# Build for a specific architecture.
-./scripts/package.sh --arch x86_64
+# Specify the supported architecture explicitly.
+./scripts/package.sh --arch arm64
+
+# Verify the generated disk image.
+APP_VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/ClipShelf.app/Contents/Info.plist)"
+./scripts/verify-dmg.sh "dist/ClipShelf-${APP_VERSION}-macOS-arm64.dmg"
 
 # Override the release version.
 CLIPSHELF_VERSION=1.0.1 CLIPSHELF_BUILD_NUMBER=2 ./scripts/package.sh
@@ -118,13 +124,14 @@ CLIPSHELF_VERSION=1.0.1 CLIPSHELF_BUILD_NUMBER=2 ./scripts/package.sh
 
 `scripts/test.sh` 自动兼容 Command Line Tools 和完整 Xcode，也可以透传 `--parallel`、`--filter` 等参数。只安装 Command Line Tools 时，它会指定 Swift Testing 的 framework / macro 路径并使用 native build system。
 
-构建产物位于 `dist/ClipShelf.app`；发布文件名包含版本和架构，例如 `ClipShelf-1.0.0-macOS-arm64.zip` 与同名 `.sha256`。在下载文件夹中校验：
+构建产物位于 `dist/ClipShelf.app`；打包脚本仅接受 `arm64`，同时生成 `ClipShelf-1.0.0-macOS-arm64.dmg`、`ClipShelf-1.0.0-macOS-arm64.zip` 及各自的 `.sha256` 文件，文件名中的版本号随发布版本变化。在下载文件夹中校验对应的包：
 
 ```bash
+shasum -a 256 -c ClipShelf-1.0.0-macOS-arm64.dmg.sha256
 shasum -a 256 -c ClipShelf-1.0.0-macOS-arm64.zip.sha256
 ```
 
-图标由 `scripts/generate-icon.swift` 使用 AppKit 向量绘制，构建时按需生成 `.icns`，无需下载素材。GitHub Actions 分别在 Apple Silicon 和 Intel macOS runner 上执行测试、构建、启动检查并提供 ZIP artifact。Runner 标签依据 [GitHub 官方文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) 配置。
+图标由 `scripts/generate-icon.swift` 使用 AppKit 向量绘制，构建时按需生成 `.icns`，无需下载素材。GitHub Actions 在 Apple Silicon `macos-15` runner 上执行测试、构建、DMG 验证和启动检查，提供 DMG、ZIP 与各自的 SHA-256 artifact。Runner 标签依据 [GitHub 官方文档](https://docs.github.com/en/actions/reference/runners/github-hosted-runners) 配置。
 
 手动验收步骤见 [docs/TESTING.md](docs/TESTING.md)。GitHub CI 验证结果以仓库 Actions 页面为准；编译和自动检查不能替代不同 macOS 版本、目标 App 与辅助功能授权的实机验证。
 
